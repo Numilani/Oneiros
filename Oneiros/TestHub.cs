@@ -1,11 +1,17 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
+using BC = BCrypt.Net.BCrypt;
 
 namespace Oneiros;
 
 public class TestHub : Hub
 {
-    Dictionary<string, string> LoginTokenMap = new();
+    Dictionary<string, string> LoginTokenMap = new()
+    {
+        {"testuser","tokenuser"},
+        {"moduser","tokenmod"},
+        {"adminuser","tokenadmin"}
+    };
 
     public override async Task<Task> OnConnectedAsync()
     {
@@ -19,30 +25,34 @@ public class TestHub : Hub
         // Test credentials
         Dictionary<string, string> CredentialMap = new()
         {
-            { "testplayer", "playerpw" },
-            { "testmod", "modpw" },
-            { "testadmin", "adminpw" }
+            { "testplayer", BC.HashPassword("playerpw") },
+            { "testmod", BC.HashPassword("modpw") },
+            { "testadmin", BC.HashPassword("adminpw") },
         };
 
 
-        if (CredentialMap.ContainsKey(username) && CredentialMap[username] == password)
+        if (CredentialMap.ContainsKey(username) && BC.Verify(password, CredentialMap[username]))
         {
             if (!LoginTokenMap.ContainsKey(username))
             {
                 LoginTokenMap[username] = new Guid().ToString();
             }
+            Console.WriteLine($"Sent login token for {username}");
             await Clients.Caller.SendAsync("ReceiveLoginToken", LoginTokenMap[username]);
+            return;
         }
+
+        Console.WriteLine($"Invalid credentials for {username}");
+        await Clients.Caller.SendAsync("ReceiveLoginToken", "invalid_credentials");
     }
 
-    public async Task Login(string loginToken)
+    public async Task LoginWithToken(string loginToken)
     {
         if (String.IsNullOrWhiteSpace(LoginTokenMap.FirstOrDefault(x => x.Value == loginToken).Key))
         {
             await Clients.Caller.SendAsync("LoginResult", false);
             return;
         }
-
         await Clients.Caller.SendAsync("LoginResult", true);
     }
 
