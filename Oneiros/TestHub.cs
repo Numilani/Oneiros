@@ -6,59 +6,55 @@ namespace Oneiros;
 
 public class TestHub : Hub
 {
+    // Test credentials
+    Dictionary<string, string> CredentialMap = new()
+    {
+        { "testplayer", BC.HashPassword("playerpw") },
+        { "testmod", BC.HashPassword("modpw") },
+        { "testadmin", BC.HashPassword("adminpw") },
+    };
+    
+    // test login tokens
     Dictionary<string, string> LoginTokenMap = new()
     {
         {"testuser","tokenuser"},
-        {"moduser","tokenmod"},
+        {"moduser",""},
         {"adminuser","tokenadmin"}
     };
 
     public override async Task<Task> OnConnectedAsync()
     {
         Console.WriteLine($"Client Connected");
-        await SendCharacterStatsData();
         return base.OnConnectedAsync();
     }
 
     public async Task GetLoginToken(string username, string password)
     {
-        // Test credentials
-        Dictionary<string, string> CredentialMap = new()
-        {
-            { "testplayer", BC.HashPassword("playerpw") },
-            { "testmod", BC.HashPassword("modpw") },
-            { "testadmin", BC.HashPassword("adminpw") },
-        };
-
-
         if (CredentialMap.ContainsKey(username) && BC.Verify(password, CredentialMap[username]))
         {
-            if (!LoginTokenMap.ContainsKey(username))
+            if (!LoginTokenMap.ContainsKey(username) || string.IsNullOrWhiteSpace(LoginTokenMap[username]))
             {
-                LoginTokenMap[username] = new Guid().ToString();
+                LoginTokenMap[username] = Guid.NewGuid().ToString();
             }
-            Console.WriteLine($"Sent login token for {username}");
-            await Clients.Caller.SendAsync("ReceiveLoginToken", LoginTokenMap[username]);
+            Console.WriteLine($"Sent login token for {username}: {LoginTokenMap[username]}");
+            await Clients.Caller.SendAsync("Receive", "ReceiveLoginToken", LoginTokenMap[username]);
             return;
         }
 
         Console.WriteLine($"Invalid credentials for {username}");
-        await Clients.Caller.SendAsync("ReceiveLoginToken", "invalid_credentials");
+        await Clients.Caller.SendAsync("Receive", "ReceiveLoginToken", "invalid_credentials");
     }
 
-    public async Task LoginWithToken(string loginToken)
+    public async Task LoginWithToken(string username, string loginToken)
     {
-        if (String.IsNullOrWhiteSpace(LoginTokenMap.FirstOrDefault(x => x.Value == loginToken).Key))
+        Random r = new Random();
+        if (LoginTokenMap[username] != loginToken)
         {
-            await Clients.Caller.SendAsync("LoginResult", false);
+            await Clients.Caller.SendAsync("Receive", "ReceiveSessionToken", -1);
             return;
         }
-        await Clients.Caller.SendAsync("LoginResult", true);
-    }
-
-    public async Task Logout()
-    {
-        // TODO: implement once there's a backing DB
+        await Clients.Caller.SendAsync("Receive", "ReceiveSessionToken", r.NextInt64());
+        await SendCharacterStatsData();
     }
 
     public async Task SendCharacterStatsData()
@@ -70,7 +66,7 @@ public class TestHub : Hub
             Hp = 20
         };
         var serialStats = JsonSerializer.Serialize(dummyStats);
-        await Clients.Caller.SendAsync("ReceivePlayerStats", serialStats);
+        await Clients.Caller.SendAsync("Receive", "ReceivePlayerStats", serialStats);
         Console.WriteLine("Sent pstats");
         Console.WriteLine(serialStats);
     }
