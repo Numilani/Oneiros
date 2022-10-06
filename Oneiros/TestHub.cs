@@ -17,9 +17,9 @@ public class TestHub : Hub
     // test login tokens
     Dictionary<string, string> LoginTokenMap = new()
     {
-        {"testuser","tokenuser"},
-        {"moduser",""},
-        {"adminuser","tokenadmin"}
+        {"testplayer","tokenuser"},
+        {"testmod",""},
+        {"testadmin","tokenadmin"}
     };
 
     public override async Task<Task> OnConnectedAsync()
@@ -50,11 +50,13 @@ public class TestHub : Hub
         Random r = new Random();
         if (LoginTokenMap[username] != loginToken)
         {
-            await Clients.Caller.SendAsync("Receive", "ReceiveSessionToken", -1);
-            return;
+            await Clients.Caller.SendAsync("Receive", "ReceiveSessionToken", "notoken");
+            Console.WriteLine($"Token Login attempted, but the token was not mapped to a username.");
+	    return;
         }
-        await Clients.Caller.SendAsync("Receive", "ReceiveSessionToken", r.NextInt64());
-        await SendCharacterStatsData();
+        string sessionToken = Guid.NewGuid().ToString();
+	await Clients.Caller.SendAsync("Receive", "ReceiveSessionToken", sessionToken);
+	Console.WriteLine($"Login token accepted - send session token: {sessionToken}");
     }
 
     public async Task SendCharacterStatsData()
